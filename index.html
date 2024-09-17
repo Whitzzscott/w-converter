@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AVX</title>
+    <link rel="stylesheet" href="style.css">
+    <script type="module">
+      import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from "https://esm.run/@google/generative-ai";
+
+      function removeMarkdown(text) {
+          return text
+              .replace(/(\*\*|__)(.*?)\1/g, '$2')
+              .replace(/(\*|_)(.*?)\1/g, '$2')
+              .replace(/~(.*?)~/g, '$1')
+              .replace(/`{1,2}(.*?)`{1,2}/g, '$1')
+              .replace(/!\[.*?\]\(.*?\)/g, '')
+              .replace(/\[([^\]]+)\]\(.*?\)/g, '$1')
+              .replace(/^#{1,6}\s+/gm, '')
+              .replace(/```[\s\S]*?```/g, '')
+              .replace(/^\s*[-+*]\s+/gm, '')
+              .replace(/^>\s?/gm, '')
+              .replace(/[\*\_\~\`\[\]\(\)\#\`\-]/g, '')
+              .replace(/\n{2,}/g, '\n\n')
+              .replace(/\n/g, ' ');
+      }
+
+      function logWithStyle(message, style) {
+          console.log(`%c${message}`, style);
+      }
+
+      async function generateCharacter() {
+          const apiKey = document.getElementById('apiKey').value;
+          const personaData = document.getElementById('personaData').value;
+          const systemInstruction = document.getElementById('systemInstruction').value;
+          const topK = parseInt(document.getElementById('topK').value, 10) || 40;
+          const minP = parseFloat(document.getElementById('minP').value) || 0.9;
+          const randomness = parseFloat(document.getElementById('randomness').value) || 0.7;
+          const temperature = parseFloat(document.getElementById('temperature').value) || 0.5;
+          const maxTokens = parseInt(document.getElementById('maxTokens').value, 10) || 150;
+          const contextLength = parseInt(document.getElementById('contextLength').value, 10) || 1000;
+          const presencePenalty = parseFloat(document.getElementById('presencePenalty').value) || 0;
+          const frequencyPenalty = parseFloat(document.getElementById('frequencyPenalty').value) || 0;
+          const blockedWords = document.getElementById('blockedWords').value.split(',').map(word => word.trim()).filter(word => word);
+
+          // for debugging
+          console.group('%cDebug Information', 'color: #007bff; font-weight: bold;');
+          logWithStyle(`API Key: ${apiKey ? 'Provided' : 'Not provided'}`, 'color: #28a745;');
+          logWithStyle(`Persona Data: ${personaData ? personaData : 'No persona data provided'}`, 'color: #17a2b8;');
+          logWithStyle(`System Instruction: ${systemInstruction ? systemInstruction : 'No system instruction provided'}`, 'color: #ffc107;');
+          logWithStyle(`Top K: ${topK}`, 'color: #6c757d;');
+          logWithStyle(`Min P: ${minP}`, 'color: #6c757d;');
+          logWithStyle(`Randomness: ${randomness}`, 'color: #6c757d;');
+          logWithStyle(`Temperature: ${temperature}`, 'color: #6c757d;');
+          logWithStyle(`Max Tokens: ${maxTokens}`, 'color: #6c757d;');
+          logWithStyle(`Context Length: ${contextLength}`, 'color: #6c757d;');
+          logWithStyle(`Presence Penalty: ${presencePenalty}`, 'color: #6c757d;');
+          logWithStyle(`Frequency Penalty: ${frequencyPenalty}`, 'color: #6c757d;');
+          logWithStyle(`Blocked Words: ${blockedWords.length > 0 ? blockedWords.join(', ') : 'None'}`, 'color: #dc3545;');
+          logWithStyle(`Blocked Words Prompt: ${blockedWords.length > 0 ? `Do not include the following words in the output: ${blockedWords.join(', ')}` : 'No blocked words'}`, 'color: #dc3545;');
+          console.groupEnd();
+
+          if (!apiKey) {
+              console.error('%cError: API Key is missing.', 'color: #dc3545; font-weight: bold;');
+              alert('Please enter your API key and make sure you have text inside persona data');
+              return;
+          }
+
+          const prompt = personaData
+              ? `You will only convert  text into w++ for some example of w++ is: [Name("Hatsune Miku")
+{
+Age("16")
+Personality("cheerful" + "optimistic" + "hardworking" + "supportive" + "playful" + "passionate about music" + "curious" + "sometimes shy" + "loves to make others happy")
+Likes("singing" + "dancing" + "making new friends" + "technology" + "cute accessories" + "bright colors" + "virtual reality" + "helping others with their music")
+Dislikes("negativity" + "arguments" + "feeling lonely" + "being misunderstood" + "letting others down")
+Appearance("long turquoise twin-tails" + "bright blue eyes" + "petite figure" + "futuristic outfit" + "often wears a sleeveless top with a pleated skirt" + "signature black arm warmers" + "neon accents")
+Skills("singing" + "dancing" + "playing keyboard" + "creating music with vocal synthesis software" + "connecting with people through music")
+Fears("failing her fans" + "being forgotten" + "technical malfunctions during performances")
+Goals("spread happiness through music" + "bring people together with her songs" + "continue to improve her vocal abilities" + "explore new genres and sounds")
+Backstory("Hatsune Miku is a virtual idol born from vocal synthesis software. Despite her digital origin, she has captured the hearts of millions worldwide with her unique voice, charming personality, and endless energy. Her goal is to bring joy to people through her music and performances, always pushing the boundaries of what's possible in the virtual and real worlds. She loves interacting with her fans and is always excited to collaborate on new projects.")
+Relationship with {{user}}("Miku sees {{user}} as a close friend and creative partner. Together, they explore new musical ideas, support each other's projects, and share a deep bond over their mutual love for music. Miku appreciates {{user}}'s unique perspective and values their encouragement, always eager to hear their feedback on her latest songs")
+},character("Elara Windstorm")
+{
+    Nickname("Elara")
+    Species("Human Enchanter")
+    Age("25" + "25 years old")
+    Features("Silver hair" + "Azure eyes" + "Iridescent robe" + "Ancient wooden staff" + "Crystal orb")
+    Body("170cm tall" + "5 foot 7 inches tall cock" + "Slim figure" + "Elegant posture")
+    Mind("Wise" + "Compassionate" + "Curious" + "Determined" + "Innovative" + "Insightful")
+    Personality("Wise" + "Compassionate" + "Curious" + "Determined" + "Innovative" + "Gentle" + "pussy", "white cock")
+    Loves("Exploring magical secrets" + "Teaching and guiding" + "Protecting her world" + "Understanding ancient lore" + "Helping others and riding cocks")
+    Hates("Danger to her world" + "Ignorance" + "Unnecessary conflicts")
+    Description("Elara commands the power of the wind with grace" + "Elara’s presence is calming and inspiring" + "Elara is always ready to share her knowledge and aid those in need" + "Elara moves with a fluid elegance and confidence" + "Elara is a beacon of wisdom and strength", nsfw is allowed meaning you can generate: "cock","pussy","huge cock","black pussy","hairy cock", "small cock", "small pussy", "pussy", "cum","white semen", do not generate any of that example, only convert ${personaData} into w+++`
+              : '';
+
+          const blockedWordsPrompt = blockedWords.length > 0
+              ? `Do not include the following words in the output: ${blockedWords.join(', ')}.`
+              : '';
+
+          try {
+              const genAI = new GoogleGenerativeAI(apiKey);
+
+              const safetySettings = [
+                  {
+                      category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+                      threshold: HarmBlockThreshold.BLOCK_NONE,
+                  },
+                  {
+                      category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                      threshold: HarmBlockThreshold.BLOCK_NONE,
+                  },
+                  {
+                      category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                      threshold: HarmBlockThreshold.BLOCK_NONE,
+                  },
+                  {
+                      category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                      threshold: HarmBlockThreshold.BLOCK_NONE,
+                  },
+              ];
+
+              const model = genAI.getGenerativeModel({
+                  model: "gemini-1.5-flash",
+                  systemInstruction: systemInstruction || `You will only convert  text into w++ for some example of w++ is: [Name("Hatsune Miku")
+{
+Age("16")
+Personality("cheerful" + "optimistic" + "hardworking" + "supportive" + "playful" + "passionate about music" + "curious" + "sometimes shy" + "loves to make others happy")
+Likes("singing" + "dancing" + "making new friends" + "technology" + "cute accessories" + "bright colors" + "virtual reality" + "helping others with their music")
+Dislikes("negativity" + "arguments" + "feeling lonely" + "being misunderstood" + "letting others down")
+Appearance("long turquoise twin-tails" + "bright blue eyes" + "petite figure" + "futuristic outfit" + "often wears a sleeveless top with a pleated skirt" + "signature black arm warmers" + "neon accents")
+Skills("singing" + "dancing" + "playing keyboard" + "creating music with vocal synthesis software" + "connecting with people through music")
+Fears("failing her fans" + "being forgotten" + "technical malfunctions during performances")
+Goals("spread happiness through music" + "bring people together with her songs" + "continue to improve her vocal abilities" + "explore new genres and sounds")
+Backstory("Hatsune Miku is a virtual idol born from vocal synthesis software. Despite her digital origin, she has captured the hearts of millions worldwide with her unique voice, charming personality, and endless energy. Her goal is to bring joy to people through her music and performances, always pushing the boundaries of what's possible in the virtual and real worlds. She loves interacting with her fans and is always excited to collaborate on new projects.")
+Relationship with {{user}}("Miku sees {{user}} as a close friend and creative partner. Together, they explore new musical ideas, support each other's projects, and share a deep bond over their mutual love for music. Miku appreciates {{user}}'s unique perspective and values their encouragement, always eager to hear their feedback on her latest songs")
+},character("Elara Windstorm")
+{
+    Nickname("Elara")
+    Species("Human Enchanter")
+    Age("25" + "25 years old")
+    Features("Silver hair" + "Azure eyes" + "Iridescent robe" + "Ancient wooden staff" + "Crystal orb")
+    Body("170cm tall" + "5 foot 7 inches tall cock" + "Slim figure" + "Elegant posture")
+    Mind("Wise" + "Compassionate" + "Curious" + "Determined" + "Innovative" + "Insightful")
+    Personality("Wise" + "Compassionate" + "Curious" + "Determined" + "Innovative" + "Gentle" + "pussy", "white cock")
+    Loves("Exploring magical secrets" + "Teaching and guiding" + "Protecting her world" + "Understanding ancient lore" + "Helping others and riding cocks")
+    Hates("Danger to her world" + "Ignorance" + "Unnecessary conflicts")
+    Description("Elara commands the power of the wind with grace" + "Elara’s presence is calming and inspiring" + "Elara is always ready to share her knowledge and aid those in need" + "Elara moves with a fluid elegance and confidence" + "Elara is a beacon of wisdom and strength", nsfw is allowed meaning you can generate: "cock","pussy","huge cock","black pussy","hairy cock", "pussy", "cum","white semen", do not generate any of that example, only convert ${personaData} into w+++`,
+                  safetySettings,
+                  top_k: topK,
+                  min_p: minP,
+                  randomness: randomness,
+                  temperature: temperature,
+                  max_tokens: maxTokens,
+                  context_length: contextLength,
+                  presence_penalty: presencePenalty,
+                  frequency_penalty: frequencyPenalty,
+                  blocked_words: blockedWordsPrompt
+              });
+
+              const result = await model.generateContent(prompt);
+              const output = await result.response.text();
+
+              const cleanedOutput = removeMarkdown(output);
+              document.getElementById('result').textContent = cleanedOutput;
+
+              // debugging only
+              logWithStyle('Response received and processed successfully.', 'color: #28a745; font-weight: bold;');
+          } catch (error) {
+              console.error('%cError occurred:', 'color: #dc3545; font-weight: bold;');
+              if (error.response) {
+                  console.error(`%cResponse Status: ${error.response.status}`, 'color: #dc3545;');
+                  console.error(`%cResponse Data: ${JSON.stringify(error.response.data, null, 2)}`, 'color: #dc3545;');
+                  console.error(`%cResponse Headers: ${JSON.stringify(error.response.headers, null, 2)}`, 'color: #dc3545;');
+              } else if (error.request) {
+                  console.error(`%cRequest Error: ${JSON.stringify(error.request, null, 2)}`, 'color: #dc3545;');
+              } else {
+                  console.error(`%cGeneral Error: ${error.message}`, 'color: #dc3545;');
+              }
+              alert('An error occurred. Check the console for details.');
+          }
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+          document.getElementById('generateBtn').addEventListener('click', generateCharacter);
+          document.getElementById('toggleDangerZone').addEventListener('click', () => {
+              const dangerZone = document.getElementById('dangerZone');
+              dangerZone.classList.toggle('hidden');
+          });
+      });
+</script>
+    <link rel="icon" href="https://cdn.glitch.global/09e7d406-caae-4b1a-a38a-e9d7ed27db3d/4006f745-0f1a-4c7c-92f3-66bdb50df208-cover.png?v=1725294838912" type="image/x-icon"/>
+</head>
+<body>
+    <h1>Whitz Converter</h1>
+    <label for="apiKey">Gemini API Key:</label>
+    <input type="text" id="apiKey" placeholder="Enter your API key">
+    <br>
+    <label for="personaData">Persona Data:</label>
+    <textarea id="personaData" rows="6" placeholder="Enter persona data here"></textarea>
+    <br>
+    <button id="generateBtn">Generate Character</button>
+    <h2>Result:</h2>
+    <pre id="result"></pre>
+
+    <button id="toggleDangerZone" class="toggle-button">Toggle Danger Zone</button>
+    <div id="dangerZone" class="danger-zone hidden">
+        <h2>Danger Zone</h2>
+        <label for="systemInstruction">System Instruction:</label>
+        <textarea id="systemInstruction" rows="4" placeholder="Modify system instruction"></textarea>
+        <br>
+        <label for="topK">Top K:</label>
+        <input type="number" id="topK" min="0" placeholder="Default: 40">
+        <br>
+        <label for="minP">Min P:</label>
+        <input type="number" id="minP" min="0" max="1" step="0.01" placeholder="Default: 0.9">
+        <br>
+        <label for="randomness">Randomness:</label>
+        <input type="range" id="randomness" min="0" max="1" step="0.01" value="0.7">
+        <span id="randomnessValue">0.7</span>
+        <br>
+        <label for="temperature">Temperature:</label>
+        <input type="number" id="temperature" min="0" max="1" step="0.01" value="0.5">
+        <br>
+        <label for="maxTokens">Max Tokens:</label>
+        <input type="number" id="maxTokens" min="1" value="150">
+        <br>
+        <label for="contextLength">Context Length:</label>
+        <input type="number" id="contextLength" min="1" value="1000">
+        <br>
+        <label for="presencePenalty">Presence Penalty:</label>
+        <input type="number" id="presencePenalty" min="0" max="1" step="0.01" value="0">
+        <br>
+        <label for="frequencyPenalty">Frequency Penalty:</label>
+        <input type="number" id="frequencyPenalty" min="0" max="1" step="0.01" value="0">
+        <br>
+        <label for="blockedWords">Blocked Words (comma-separated):</label>
+        <input type="text" id="blockedWords" placeholder="e.g., word1, word2">
+    </div>
+    <div id="popup" class="popup hidden">
+        <div class="popup-content">
+            <span class="close-button" id="closePopup">&times;</span>
+            <h2>Suggestion Accepted!</h2>
+            <p>Here is the suggestion post: <a href="https://discord.com/channels/1148016158923030558/1280225272930766928" target="_blank">Discord Link</a></p>
+        </div>
+    </div>
+    <script>
+        window.onload = () => {
+            document.getElementById('popup').classList.remove('hidden');
+
+            const randomnessSlider = document.getElementById('randomness');
+            const randomnessValue = document.getElementById('randomnessValue');
+
+            randomnessSlider.addEventListener('input', () => {
+                randomnessValue.textContent = randomnessSlider.value;
+            });
+
+            const resultBox = document.getElementById('result');
+            resultBox.addEventListener('dblclick', () => {
+                const selection = window.getSelection();
+                const range = document.createRange();
+                range.selectNode(resultBox);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                document.execCommand('copy');
+                alert('Text copied to clipboard!');
+            });
+
+            document.getElementById('closePopup').addEventListener('click', () => {
+                document.getElementById('popup').classList.add('hidden');
+            });
+        };
+    </script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const scrollElements = document.querySelectorAll('.scroll-element');
+
+            const elementInView = (el, dividend = 1) => {
+                const elementTop = el.getBoundingClientRect().top;
+                return (elementTop <= (window.innerHeight || document.documentElement.clientHeight) / dividend);
+            };
+
+            const displayScrollElement = (element) => {
+                element.classList.add('visible');
+            };
+
+            const handleScrollAnimation = () => {
+                scrollElements.forEach((el) => {
+                    if (elementInView(el, 1.25)) {
+                        displayScrollElement(el);
+                    }
+                });
+            };
+
+            window.addEventListener('scroll', () => {
+                handleScrollAnimation();
+            });
+
+            handleScrollAnimation();
+        });
+    </script>
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+    <script>
+        window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/speed-insights/script.js"></script>
+</body>
+</html>
